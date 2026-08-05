@@ -1,0 +1,189 @@
+/* Workflow Timeline Graph Stylesheet - Desk Suite */
+
+.workflow-timeline-wrapper {
+	margin: 12px 0 20px 0;
+	padding: 16px 20px;
+	background: var(--card-bg, #ffffff);
+	border: 1px solid var(--border-color, #e2e8f0);
+	border-radius: var(--border-radius-lg, 10px);
+	box-shadow: var(--card-shadow, 0 1px 3px rgba(0,0,0,0.05));
+	font-family: var(--font-stack, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+	transition: all 0.2s ease-in-out;
+}
+
+.workflow-timeline-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 12px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--border-color, #f1f5f9);
+}
+
+.workflow-timeline-title {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--text-color, #1e293b);
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.workflow-timeline-title .octicon {
+	color: var(--primary, #2563eb);
+}
+
+.workflow-timeline-canvas-container {
+	width: 100%;
+	overflow-x: auto;
+	padding: 10px 0;
+}
+
+.workflow-timeline-svg {
+	display: block;
+	min-width: 600px;
+	width: 100%;
+	height: auto;
+}
+
+/* Timeline Node Styles */
+.wf-node {
+	cursor: pointer;
+	transition: transform 0.2s ease;
+}
+
+.wf-node:hover {
+	transform: scale(1.05);
+}
+
+.wf-node-circle {
+	transition: all 0.3s ease;
+}
+
+.wf-node-circle.approved {
+	fill: #10b981;
+	stroke: #059669;
+	stroke-width: 2;
+}
+
+.wf-node-circle.current {
+	fill: #f59e0b;
+	stroke: #d97706;
+	stroke-width: 3;
+	animation: wf-pulse-yellow 2s infinite;
+}
+
+.wf-node-circle.future {
+	fill: #f8fafc;
+	stroke: #94a3b8;
+	stroke-width: 2;
+	stroke-dasharray: 4 2;
+}
+
+.wf-node-circle.final_target {
+	fill: #10b981;
+	stroke: #047857;
+	stroke-width: 3;
+}
+
+.wf-node-label {
+	font-size: 12px;
+	font-weight: 600;
+	fill: var(--text-color, #334155);
+	text-anchor: middle;
+}
+
+.wf-node-sublabel {
+	font-size: 10px;
+	fill: var(--text-muted, #64748b);
+	text-anchor: middle;
+}
+
+/* Timeline Edge / Line Styles */
+.wf-edge-line {
+	stroke-width: 2.5;
+	fill: none;
+	transition: all 0.3s ease;
+}
+
+.wf-edge-line.approved {
+	stroke: #10b981;
+}
+
+.wf-edge-line.pending_active {
+	stroke: #f59e0b;
+	stroke-dasharray: 6 4;
+	animation: wf-dash-flow 1.5s linear infinite;
+}
+
+.wf-edge-line.future {
+	stroke: #cbd5e1;
+	stroke-dasharray: 4 4;
+}
+
+.wf-edge-line.rejected {
+	stroke: #ef4444;
+	stroke-width: 2;
+	stroke-dasharray: 5 3;
+}
+
+/* Duration Pill Badge */
+.wf-duration-pill {
+	fill: var(--control-bg, #f1f5f9);
+	stroke: var(--border-color, #cbd5e1);
+	stroke-width: 1;
+	rx: 10;
+	ry: 10;
+}
+
+.wf-duration-text {
+	font-size: 10px;
+	font-weight: 600;
+	fill: #0f172a;
+	text-anchor: middle;
+	dominant-baseline: central;
+}
+
+.wf-duration-pill.approved-pill {
+	fill: #d1fae5;
+	stroke: #6ee7b7;
+}
+
+.wf-duration-pill.approved-pill + .wf-duration-text {
+	fill: #065f46;
+}
+
+.wf-duration-pill.rejected-pill {
+	fill: #fee2e2;
+	stroke: #fca5a5;
+}
+
+.wf-duration-pill.rejected-pill + .wf-duration-text {
+	fill: #991b1b;
+}
+
+/* Keyframe Animations */
+@keyframes wf-pulse-yellow {
+	0% {
+		box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
+		r: 14;
+	}
+	50% {
+		r: 17;
+	}
+	100% {
+		box-shadow: 0 0 0 10px rgba(245, 158, 11, 0);
+		r: 14;
+	}
+}
+
+@keyframes wf-dash-flow {
+	from {
+		stroke-dashoffset: 20;
+	}
+	to {
+		stroke-dashoffset: 0;
+	}
+}
