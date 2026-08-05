@@ -77,35 +77,48 @@ def get_workflow_history(doctype, docname, state_field, doc):
 	# Query Workflow Actions
 	actions = frappe.db.get_all(
 		"Workflow Action",
-		filters={"reference_doctype": doctype, "reference_name": docname, "status": "Completed"},
-		fields=["workflow_state", "user", "completed_by", "modified", "creation"],
+		filters={"reference_doctype": doctype, "reference_name": docname},
+		fields=["workflow_state", "status", "user", "completed_by", "modified", "creation"],
 		order_by="modified asc",
 	)
 
 	for act in actions:
-		user_email = act.completed_by or act.user or doc.owner
-		history.append(
-			{
-				"state": act.workflow_state,
-				"action": "Transitioned",
-				"user": user_email,
-				"user_full_name": frappe.utils.get_fullname(user_email),
-				"timestamp": str(act.modified),
-				"raw_datetime": act.modified,
-			}
-		)
+		if act.status == "Completed":
+			user_email = act.completed_by or act.user or doc.owner
+			history.append(
+				{
+					"state": act.workflow_state,
+					"action": "Transitioned",
+					"user": user_email,
+					"user_full_name": frappe.utils.get_fullname(user_email),
+					"timestamp": str(act.modified),
+					"raw_datetime": act.modified,
+				}
+			)
+
+	current_state = doc.get(state_field)
 
 	# Sort by raw_datetime
 	history.sort(key=lambda x: x["raw_datetime"])
 
-	# Deduplicate consecutive identical states keeping first and last timestamp
+	# Keep the earliest entry when entering a new state
 	unique_history = []
 	for item in history:
 		if not unique_history or unique_history[-1]["state"] != item["state"]:
 			unique_history.append(item)
-		else:
-			unique_history[-1]["timestamp"] = item["timestamp"]
-			unique_history[-1]["raw_datetime"] = item["raw_datetime"]
+
+	# Guarantee current_state is at the end of history if doc has progressed beyond initial state
+	if current_state and (not unique_history or unique_history[-1]["state"] != current_state):
+		unique_history.append(
+			{
+				"state": current_state,
+				"action": "Current",
+				"user": "",
+				"user_full_name": "",
+				"timestamp": str(doc.modified),
+				"raw_datetime": doc.modified,
+			}
+		)
 
 	# Compute elapsed durations between steps
 	for i in range(len(unique_history)):
@@ -115,11 +128,11 @@ def get_workflow_history(doctype, docname, state_field, doc):
 			diff_sec = time_diff_in_seconds(dt2, dt1)
 			unique_history[i]["duration"] = format_duration(diff_sec)
 		else:
-			if unique_history[i]["state"] == doc.get(state_field):
+			if unique_history[i]["state"] == current_state:
 				diff_sec = time_diff_in_seconds(
 					frappe.utils.now_datetime(), unique_history[i]["raw_datetime"]
 				)
-				unique_history[i]["duration"] = format_duration(diff_sec) + " " + _("(pending)")
+				unique_history[i]["duration"] = format_duration(diff_sec)
 			else:
 				unique_history[i]["duration"] = ""
 
@@ -199,7 +212,9 @@ def build_graph_topology(workflow, history, current_state, future_path, state_do
 		docstatus = state_docstatus_map.get(s, 0)
 
 		status = "future"
-		if is_current:
+		if is_current and docstatus == 1:
+			status = "approved"
+		elif is_current:
 			status = "current"
 		elif is_visited:
 			status = "approved"
@@ -225,14 +240,20 @@ def build_graph_topology(workflow, history, current_state, future_path, state_do
 	for i in range(len(history) - 1):
 		from_s = history[i]["state"]
 		to_s = history[i + 1]["state"]
-		dur = history[i].get("duration", "")
 		is_rejection = is_rejection_transition(workflow, from_s, to_s)
+
+		if is_rejection:
+			edge_status = "rejected"
+			dur = history[i].get("duration", "")
+		else:
+			edge_status = "approved"
+			dur = history[i].get("duration", "")
 
 		edges.append(
 			{
 				"from": from_s,
 				"to": to_s,
-				"status": "rejected" if is_rejection else "approved",
+				"status": edge_status,
 				"duration": dur,
 				"is_arc": is_rejection,
 				"user": history[i].get("user_full_name", ""),
@@ -250,13 +271,14 @@ def build_graph_topology(workflow, history, current_state, future_path, state_do
 		)
 		if not already_exists:
 			is_next = from_s == current_state
+			dur = history_map.get(current_state, {}).get("duration", "") if is_next else ""
 			edges.append(
 				{
 					"from": from_s,
 					"to": to_s,
 					"action": action_label,
 					"status": "pending_active" if is_next else "future",
-					"duration": "",
+					"duration": dur,
 					"is_arc": False,
 				}
 			)
@@ -288,6 +310,8 @@ def format_duration(seconds):
 	if seconds is None or seconds < 0:
 		return ""
 	seconds = int(seconds)
+	if seconds == 0:
+		return "< 1m"
 	if seconds < 60:
 		return f"{seconds}s"
 	minutes = seconds // 60

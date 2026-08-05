@@ -1,34 +1,33 @@
 /* Workflow Timeline Graph Stylesheet - Desk Suite */
 
 .workflow-timeline-wrapper {
-	margin: 12px 0 20px 0;
-	padding: 16px 20px;
+	margin: 4px 0 8px 0;
+	padding: 6px 16px;
 	background: var(--card-bg, #ffffff);
 	border: 1px solid var(--border-color, #e2e8f0);
-	border-radius: var(--border-radius-lg, 10px);
-	box-shadow: var(--card-shadow, 0 1px 3px rgba(0,0,0,0.05));
+	border-radius: var(--border-radius-lg, 6px);
+	box-shadow: 0 1px 2px rgba(0,0,0,0.02);
 	font-family: var(--font-stack, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
-	transition: all 0.2s ease-in-out;
 }
 
 .workflow-timeline-header {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	margin-bottom: 12px;
-	padding-bottom: 8px;
-	border-bottom: 1px solid var(--border-color, #f1f5f9);
+	margin-bottom: 4px;
+	padding-bottom: 4px;
+	border-bottom: 1px solid var(--border-color, #f8fafc);
 }
 
 .workflow-timeline-title {
-	font-size: 13px;
+	font-size: 10.5px;
 	font-weight: 600;
-	color: var(--text-color, #1e293b);
+	color: var(--text-muted, #64748b);
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	gap: 5px;
 	text-transform: uppercase;
-	letter-spacing: 0.5px;
+	letter-spacing: 0.4px;
 }
 
 .workflow-timeline-title .octicon {
@@ -37,109 +36,114 @@
 
 .workflow-timeline-canvas-container {
 	width: 100%;
+	display: flex;
+	justify-content: center;
+	align-items: center;
 	overflow-x: auto;
-	padding: 10px 0;
+	-webkit-overflow-scrolling: touch;
+	padding: 4px 0;
 }
 
 .workflow-timeline-svg {
 	display: block;
-	min-width: 600px;
-	width: 100%;
+	margin: 0 auto;
+	max-width: 100%;
 	height: auto;
 }
 
-/* Timeline Node Styles */
+/* Timeline Node Styles - Static Rendering */
 .wf-node {
-	cursor: pointer;
-	transition: transform 0.2s ease;
-}
-
-.wf-node:hover {
-	transform: scale(1.05);
+	cursor: default;
 }
 
 .wf-node-circle {
-	transition: all 0.3s ease;
+	transition: none !important;
 }
 
 .wf-node-circle.approved {
 	fill: #10b981;
 	stroke: #059669;
-	stroke-width: 2;
+	stroke-width: 1.5;
 }
 
 .wf-node-circle.current {
 	fill: #f59e0b;
 	stroke: #d97706;
-	stroke-width: 3;
-	animation: wf-pulse-yellow 2s infinite;
+	stroke-width: 1.8;
 }
 
 .wf-node-circle.future {
 	fill: #f8fafc;
 	stroke: #94a3b8;
-	stroke-width: 2;
-	stroke-dasharray: 4 2;
+	stroke-width: 1.5;
+	stroke-dasharray: 3 2;
 }
 
 .wf-node-circle.final_target {
 	fill: #10b981;
 	stroke: #047857;
-	stroke-width: 3;
+	stroke-width: 1.8;
 }
 
 .wf-node-label {
-	font-size: 12px;
+	font-size: 11.5px;
 	font-weight: 600;
 	fill: var(--text-color, #334155);
 	text-anchor: middle;
 }
 
 .wf-node-sublabel {
-	font-size: 10px;
+	font-size: 9.5px;
 	fill: var(--text-muted, #64748b);
 	text-anchor: middle;
 }
 
 /* Timeline Edge / Line Styles */
 .wf-edge-line {
-	stroke-width: 2.5;
+	stroke-width: 2px;
 	fill: none;
-	transition: all 0.3s ease;
+	transition: none !important;
 }
 
 .wf-edge-line.approved {
-	stroke: #10b981;
+	stroke: #10b981 !important;
+	stroke-width: 2px !important;
+	stroke-dasharray: none !important;
+	opacity: 1 !important;
 }
 
 .wf-edge-line.pending_active {
-	stroke: #f59e0b;
-	stroke-dasharray: 6 4;
-	animation: wf-dash-flow 1.5s linear infinite;
+	stroke: #f59e0b !important;
+	stroke-width: 2.2px !important;
+	stroke-dasharray: 5 4 !important;
+	opacity: 1 !important;
 }
 
 .wf-edge-line.future {
-	stroke: #cbd5e1;
-	stroke-dasharray: 4 4;
+	stroke: #cbd5e1 !important;
+	stroke-width: 1.5px !important;
+	stroke-dasharray: 4 3 !important;
+	opacity: 1 !important;
 }
 
 .wf-edge-line.rejected {
-	stroke: #ef4444;
-	stroke-width: 2;
-	stroke-dasharray: 5 3;
+	stroke: #ef4444 !important;
+	stroke-width: 2px !important;
+	stroke-dasharray: 4 3 !important;
+	opacity: 1 !important;
 }
 
 /* Duration Pill Badge */
 .wf-duration-pill {
 	fill: var(--control-bg, #f1f5f9);
 	stroke: var(--border-color, #cbd5e1);
-	stroke-width: 1;
-	rx: 10;
-	ry: 10;
+	stroke-width: 0.9;
+	rx: 8;
+	ry: 8;
 }
 
 .wf-duration-text {
-	font-size: 10px;
+	font-size: 9.5px;
 	font-weight: 600;
 	fill: #0f172a;
 	text-anchor: middle;
@@ -155,6 +159,15 @@
 	fill: #065f46;
 }
 
+.wf-duration-pill.current-pill {
+	fill: #fef3c7;
+	stroke: #fcd34d;
+}
+
+.wf-duration-pill.current-pill + .wf-duration-text {
+	fill: #92400e;
+}
+
 .wf-duration-pill.rejected-pill {
 	fill: #fee2e2;
 	stroke: #fca5a5;
@@ -162,28 +175,4 @@
 
 .wf-duration-pill.rejected-pill + .wf-duration-text {
 	fill: #991b1b;
-}
-
-/* Keyframe Animations */
-@keyframes wf-pulse-yellow {
-	0% {
-		box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
-		r: 14;
-	}
-	50% {
-		r: 17;
-	}
-	100% {
-		box-shadow: 0 0 0 10px rgba(245, 158, 11, 0);
-		r: 14;
-	}
-}
-
-@keyframes wf-dash-flow {
-	from {
-		stroke-dashoffset: 20;
-	}
-	to {
-		stroke-dashoffset: 0;
-	}
 }

@@ -28,7 +28,8 @@ app_license = "mit"
 app_include_css = "/assets/desk_suite/css/workflow_timeline.css"
 app_include_js = [
     "/assets/desk_suite/js/workflow_timeline.js",
-    "/assets/desk_suite/js/advanced_search.js"
+    "/assets/desk_suite/js/advanced_search.js",
+    "/assets/desk_suite/js/voice_dictation.js"
 ]
 
 # include js, css files in header of web template
