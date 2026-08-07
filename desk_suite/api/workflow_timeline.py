@@ -1,6 +1,7 @@
 # Copyright (c) 2026, Syed Mujeer Hashmi and contributors
 # For license information, please see license.txt
 
+import json
 import frappe
 from frappe import _
 from frappe.utils import time_diff_in_seconds
@@ -58,7 +59,7 @@ def get_workflow_timeline_data(doctype: str, docname: str):
 
 
 def get_workflow_history(doctype, docname, state_field, doc):
-	"""Extracts execution history from Workflow Action, Comment, and Version records."""
+	"""Extracts execution history from Version audit log, Workflow Comments, and Workflow Actions."""
 	history = []
 
 	# Initial Creation
@@ -74,21 +75,88 @@ def get_workflow_history(doctype, docname, state_field, doc):
 		}
 	)
 
-	# Query Workflow Actions
+	# 1. Parse Version logs for state changes
+	versions = frappe.db.get_all(
+		"Version",
+		filters={"ref_doctype": doctype, "docname": docname},
+		fields=["data", "owner", "creation"],
+		order_by="creation asc",
+	)
+
+	for v in versions:
+		if not v.data:
+			continue
+		try:
+			data = json.loads(v.data) if isinstance(v.data, str) else v.data
+			changed = data.get("changed", [])
+			for change in changed:
+				if len(change) >= 3 and change[0] == state_field:
+					prev_state = change[1]
+					next_state = change[2]
+
+					# Ensure previous state is in history if missing
+					if prev_state and (not history or history[-1]["state"] != prev_state):
+						if not any(h["state"] == prev_state for h in history):
+							history.append(
+								{
+									"state": prev_state,
+									"action": "Transitioned",
+									"user": v.owner,
+									"user_full_name": frappe.utils.get_fullname(v.owner),
+									"timestamp": str(v.creation),
+									"raw_datetime": v.creation,
+								}
+							)
+
+					history.append(
+						{
+							"state": next_state,
+							"action": "Transitioned",
+							"user": v.owner,
+							"user_full_name": frappe.utils.get_fullname(v.owner),
+							"timestamp": str(v.creation),
+							"raw_datetime": v.creation,
+						}
+					)
+		except Exception:
+			continue
+
+	# 2. Parse Workflow Comments if any
+	comments = frappe.db.get_all(
+		"Comment",
+		filters={"reference_doctype": doctype, "reference_name": docname, "comment_type": "Workflow"},
+		fields=["content", "owner", "creation"],
+		order_by="creation asc",
+	)
+
+	for c in comments:
+		if c.content and not any(h["state"] == c.content and h["timestamp"] == str(c.creation) for h in history):
+			history.append(
+				{
+					"state": c.content,
+					"action": "Workflow Comment",
+					"user": c.owner,
+					"user_full_name": frappe.utils.get_fullname(c.owner),
+					"timestamp": str(c.creation),
+					"raw_datetime": c.creation,
+				}
+			)
+
+	# 3. Parse Workflow Actions if missing
 	actions = frappe.db.get_all(
 		"Workflow Action",
-		filters={"reference_doctype": doctype, "reference_name": docname},
-		fields=["workflow_state", "status", "user", "completed_by", "modified", "creation"],
+		filters={"reference_doctype": doctype, "reference_name": docname, "status": "Completed"},
+		fields=["workflow_state", "user", "completed_by", "modified"],
 		order_by="modified asc",
 	)
 
 	for act in actions:
-		if act.status == "Completed":
-			user_email = act.completed_by or act.user or doc.owner
+		user_email = act.completed_by or act.user
+		if act.workflow_state and not any(h["state"] == act.workflow_state for h in history):
 			history.append(
 				{
 					"state": act.workflow_state,
-					"action": "Transitioned",
+					"action": "Workflow Action",
 					"user": user_email,
 					"user_full_name": frappe.utils.get_fullname(user_email),
 					"timestamp": str(act.modified),
@@ -96,25 +164,24 @@ def get_workflow_history(doctype, docname, state_field, doc):
 				}
 			)
 
-	current_state = doc.get(state_field)
-
 	# Sort by raw_datetime
 	history.sort(key=lambda x: x["raw_datetime"])
 
-	# Keep the earliest entry when entering a new state
+	# Deduplicate consecutive identical states
 	unique_history = []
 	for item in history:
 		if not unique_history or unique_history[-1]["state"] != item["state"]:
 			unique_history.append(item)
 
-	# Guarantee current_state is at the end of history if doc has progressed beyond initial state
+	# Guarantee current_state is at the end of history
+	current_state = doc.get(state_field)
 	if current_state and (not unique_history or unique_history[-1]["state"] != current_state):
 		unique_history.append(
 			{
 				"state": current_state,
 				"action": "Current",
-				"user": "",
-				"user_full_name": "",
+				"user": doc.modified_by or "",
+				"user_full_name": frappe.utils.get_fullname(doc.modified_by) if doc.modified_by else "",
 				"timestamp": str(doc.modified),
 				"raw_datetime": doc.modified,
 			}
@@ -151,7 +218,7 @@ def workflow_initial_state(doctype, docname, doc, state_field):
 def calculate_future_path(doc, workflow, current_state, state_docstatus_map):
 	"""Traverses outgoing transitions from current_state evaluating `condition` Python expressions
 
-	to find the path leading to final approval (docstatus = 1).
+	to find the happy path leading to final approval (docstatus = 1).
 	"""
 	path = [current_state] if current_state else []
 	if not current_state:
@@ -167,6 +234,10 @@ def calculate_future_path(doc, workflow, current_state, state_docstatus_map):
 		valid_next = None
 		for t in workflow.transitions:
 			if t.state == curr and t.next_state not in visited:
+				# Skip rejection/return actions during forward happy-path resolution
+				action_lower = (t.action or "").lower()
+				if any(k in action_lower for k in ["reject", "return", "send back", "cancel", "deny"]):
+					continue
 				if evaluate_transition_condition(t.condition, doc):
 					valid_next = t.next_state
 					break
@@ -185,7 +256,7 @@ def evaluate_transition_condition(condition, doc):
 	if not condition:
 		return True
 	try:
-		eval_dict = {"doc": doc.as_dict()}
+		eval_dict = {"doc": doc, "frappe": frappe}
 		return bool(frappe.safe_eval(condition, None, eval_dict))
 	except Exception:
 		return True

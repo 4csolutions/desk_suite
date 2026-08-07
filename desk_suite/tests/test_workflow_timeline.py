@@ -4,6 +4,8 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from desk_suite.api.workflow_timeline import (
+	calculate_future_path,
+	evaluate_transition_condition,
 	format_duration,
 	get_workflow_timeline_data,
 	is_rejection_transition,
@@ -95,3 +97,9 @@ class TestWorkflowTimeline(FrappeTestCase):
 		wf = frappe.get_doc("Workflow", "ToDo Test Workflow")
 		self.assertTrue(is_rejection_transition(wf, "Pending Review", "Rejected"))
 		self.assertFalse(is_rejection_transition(wf, "Pending Review", "Approved"))
+
+	def test_conditional_future_path(self):
+		todo = frappe.get_doc({"doctype": "ToDo", "description": "Test Condition", "status": "Open"}).insert(ignore_permissions=True)
+		wf = frappe.get_doc("Workflow", "ToDo Test Workflow")
+		path = calculate_future_path(todo, wf, "Draft", {"Draft": 0, "Pending Review": 0, "Approved": 1, "Rejected": 0})
+		self.assertEqual(path, ["Draft", "Pending Review", "Approved"])
