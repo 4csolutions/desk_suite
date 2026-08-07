@@ -1,10 +1,19 @@
-// Override frappe.ui.form.LinkSelector and ControlLink to support enhanced multi-column search, flexible comparison operators, and tree hierarchy selectors.
 $(document).ready(function() {
-    if (typeof frappe === "undefined" || !frappe.ui || !frappe.ui.form || !frappe.ui.form.LinkSelector) {
-        return;
+    function init_overrides() {
+        if (typeof frappe === "undefined" || !frappe.ui || !frappe.ui.form || !frappe.ui.form.LinkSelector) {
+            setTimeout(init_overrides, 50);
+            return;
+        }
+        setup_advanced_search_overrides();
     }
+    init_overrides();
 
-    let tree_dialog_open = false;
+    function setup_advanced_search_overrides() {
+        if (frappe.ui.form.LinkSelector.prototype.make.is_overridden) {
+            return;
+        }
+
+        let tree_dialog_open = false;
 
     // Helper to show custom Tree Selection Dialog for tree-structured DocTypes
     function show_tree_selector(doctype, current_value, callback) {
@@ -15,15 +24,22 @@ $(document).ready(function() {
             title: __("Select {0}", [__(doctype)]),
             fields: [
                 {
+                    fieldtype: "Data",
+                    fieldname: "search_input",
+                    label: __("Search"),
+                    placeholder: __("Type to search tree...")
+                },
+                {
                     fieldtype: "HTML",
                     fieldname: "tree_container",
-                    options: '<div style="max-height: 400px; overflow-y: auto; padding: 10px; border: 1px solid var(--border-color, #f1f3f5); border-radius: 4px;"></div>'
+                    options: '<div class="tree-container-wrapper" style="max-height: 400px; overflow-y: auto; padding: 10px; border: 1px solid var(--border-color, #f1f3f5); border-radius: 4px;"></div>'
                 }
             ],
             primary_action_label: __("Select"),
             primary_action: function() {
                 if (d.selected_node) {
-                    callback(d.selected_node.label);
+                    let val = d.selected_node.label || d.selected_node;
+                    callback(val);
                     d.hide();
                 } else {
                     frappe.msgprint(__("Please select a node first"));
@@ -40,37 +56,103 @@ $(document).ready(function() {
         container.on("dblclick", ".tree-link", function(e) {
             e.preventDefault();
             if (d.selected_node) {
-                callback(d.selected_node.label);
+                let val = d.selected_node.label || d.selected_node;
+                callback(val);
                 d.hide();
             }
         });
 
-        frappe.call({
-            method: "frappe.desk.treeview.get_children",
-            args: {
-                doctype: doctype,
-                parent: "",
-                is_root: true
-            },
-            callback: function(r) {
-                let root_val = (r.message && r.message.length > 0) ? r.message[0].value : doctype;
-                let root_lbl = (r.message && r.message.length > 0) ? r.message[0].title : doctype;
+        let search_field = d.get_field("search_input");
+        let $tree_container_wrapper = d.get_field("tree_container").$wrapper.find(".tree-container-wrapper");
+        let tree;
 
-                let tree = new frappe.ui.Tree({
-                    parent: d.get_field("tree_container").$wrapper.find("div"),
-                    label: root_lbl,
-                    root_value: root_val,
-                    expandable: true,
-                    args: {
-                        doctype: doctype
-                    },
-                    method: "frappe.desk.treeview.get_children",
-                    on_click: (node) => {
-                        d.selected_node = node;
-                    }
-                });
+        let init_tree = () => {
+            $tree_container_wrapper.empty();
+            let tree_div = $('<div class="tree-view-area"></div>').appendTo($tree_container_wrapper);
+            frappe.call({
+                method: "frappe.desk.treeview.get_children",
+                args: {
+                    doctype: doctype,
+                    parent: "",
+                    is_root: true
+                },
+                callback: function(r) {
+                    let root_val = (r.message && r.message.length > 0) ? r.message[0].value : doctype;
+                    let root_lbl = (r.message && r.message.length > 0) ? r.message[0].title : doctype;
+
+                    tree = new frappe.ui.Tree({
+                        parent: tree_div,
+                        label: root_lbl,
+                        root_value: root_val,
+                        expandable: true,
+                        args: {
+                            doctype: doctype
+                        },
+                        method: "frappe.desk.treeview.get_children",
+                        on_click: (node) => {
+                            d.selected_node = node;
+                        }
+                    });
+                }
+            });
+        };
+
+        init_tree();
+
+        search_field.$input.on("input", frappe.utils.debounce(() => {
+            let txt = search_field.get_value();
+            if (!txt) {
+                d.selected_node = null;
+                init_tree();
+                return;
             }
-        });
+
+            $tree_container_wrapper.empty();
+            $tree_container_wrapper.append(`<div class="tree-search-loading" style="padding: 10px; color: var(--text-muted);">${__("Searching...")}</div>`);
+
+            frappe.call({
+                method: "frappe.desk.search.search_link",
+                args: {
+                    doctype: doctype,
+                    txt: txt,
+                    filters: {}
+                },
+                callback: function(r) {
+                    $tree_container_wrapper.empty();
+                    let results = r.message || [];
+                    if (results.length === 0) {
+                        $tree_container_wrapper.append(`<div style="padding: 10px; color: var(--text-muted);">${__("No matching records found")}</div>`);
+                        return;
+                    }
+
+                    let $list = $('<div class="list-group" style="margin-bottom: 0;"></div>').appendTo($tree_container_wrapper);
+                    results.forEach(res => {
+                        let name = Array.isArray(res) ? res[0] : (res.value || res.name);
+                        let desc = Array.isArray(res) ? res.slice(1).join(", ") : (res.description || "");
+
+                        let $item = $(`
+                            <a href="#" class="list-group-item list-group-item-action tree-search-result-item" style="padding: 8px 12px; border: 1px solid var(--border-color, #f1f3f5); border-radius: 4px; margin-bottom: 4px; display: block; text-decoration: none; color: var(--text-color);">
+                                <strong>${name}</strong>
+                                ${desc ? `<br><small class="text-muted">${desc}</small>` : ""}
+                            </a>
+                        `).appendTo($list);
+
+                        $item.on("click", function(e) {
+                            e.preventDefault();
+                            $list.find(".tree-search-result-item").css("background-color", "").css("border-color", "");
+                            $(this).css("background-color", "var(--control-bg-hover, #f8f9fa)").css("border-color", "var(--primary-color, #007bff)");
+                            d.selected_node = name;
+                        });
+
+                        $item.on("dblclick", function(e) {
+                            e.preventDefault();
+                            callback(name);
+                            d.hide();
+                        });
+                    });
+                }
+            });
+        }, 300));
 
         d.show();
     }
@@ -112,6 +194,11 @@ $(document).ready(function() {
             // Remove duplicates from search_fields
             search_fields = [...new Set(search_fields)];
 
+            // Prepend "name" (ID) by default
+            if (!search_fields.includes("name")) {
+                search_fields.unshift("name");
+            }
+
             // Load all target link field doctype definitions first to check if they are tree structures
             let link_fields_to_load = [];
             search_fields.forEach(fieldname => {
@@ -146,6 +233,15 @@ $(document).ready(function() {
 
             search_fields.forEach((fieldname, index) => {
                 let df = frappe.meta.get_docfield(this.doctype, fieldname);
+                let actual_fieldname = fieldname;
+                if (fieldname === "name" && !df) {
+                    df = {
+                        fieldname: "_name",
+                        label: __("ID"),
+                        fieldtype: "Data"
+                    };
+                    actual_fieldname = "_name";
+                }
                 if (df) {
                     if (index > 0 && index % 2 === 0) {
                         fields.push({ fieldtype: "Column Break" });
@@ -163,9 +259,9 @@ $(document).ready(function() {
                     fields.push({
                         fieldtype: fieldtype,
                         label: __(df.label),
-                        fieldname: fieldname,
+                        fieldname: actual_fieldname,
                         options: df.options,
-                        default: (this.target && this.target.doc) ? this.target.doc[fieldname] : undefined
+                        default: (actual_fieldname === "_name") ? undefined : ((this.target && this.target.doc) ? this.target.doc[fieldname] : undefined)
                     });
                 }
             });
@@ -217,7 +313,8 @@ $(document).ready(function() {
 
         // Bind change events to standard filter fields and operator selectors
         search_fields.forEach(fieldname => {
-            let field = this.dialog.get_field(fieldname);
+            let actual_fieldname = fieldname === "name" ? "_name" : fieldname;
+            let field = this.dialog.get_field(actual_fieldname);
 
             if (field) {
                 field.df.onchange = () => {
@@ -379,8 +476,14 @@ $(document).ready(function() {
         // Remove duplicates from search_fields
         search_fields = [...new Set(search_fields)];
 
+        // Prepend "name" (ID) by default
+        if (!search_fields.includes("name")) {
+            search_fields.unshift("name");
+        }
+
         search_fields.forEach(fieldname => {
-            let field = this.dialog.fields_dict[fieldname];
+            let actual_fieldname = fieldname === "name" ? "_name" : fieldname;
+            let field = this.dialog.fields_dict[actual_fieldname];
             let val = field ? field.get_value() : undefined;
             let op = field ? (field.selected_operator || "=") : "=";
 
@@ -483,4 +586,5 @@ $(document).ready(function() {
             me.dialog.get_primary_btn()
         );
     };
+    }
 });
