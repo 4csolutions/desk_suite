@@ -76,28 +76,56 @@ function draw_timeline_svg(svg, nodes, edges) {
 	const node_spacing = 140;
 	const svg_width = padding_x * 2 + Math.max(0, node_count - 1) * node_spacing;
 
-	// 1. Separate forward edges vs orthogonal arc (return/loopback) edges
-	const arc_edges = edges.filter(e => e.is_arc || e.status === "rejected");
-	const arc_count = arc_edges.length;
+	// Map node ID to X coordinate and Index
+	const node_coords = {};
+	nodes.forEach((node, idx) => {
+		node_coords[node.id] = {
+			x: padding_x + idx * node_spacing,
+			index: idx,
+			data: node
+		};
+	});
 
-	// 2. Dynamic Height Calculation based on return layers
-	const max_arc_layer = arc_count;
-	const top_space = max_arc_layer > 0 ? (16 + max_arc_layer * 22) : 10;
+	// 1. Analyze Edges to prevent overlapping & identify duplicate forward lines
+	const seen_forward_pairs = {};
+	let top_arc_count = 0;
+	let bottom_arc_count = 0;
+
+	edges.forEach(edge => {
+		const src = node_coords[edge.from];
+		const tgt = node_coords[edge.to];
+		if (!src || !tgt) return;
+
+		const pair_key = `${edge.from}->${edge.to}`;
+		const is_return = edge.is_arc || edge.status === "rejected" || src.index > tgt.index;
+
+		if (is_return) {
+			edge.route_type = "top_arc";
+			edge.layer_index = top_arc_count++;
+		} else if (seen_forward_pairs[pair_key]) {
+			// Duplicate forward pass (re-approval pass over same pair) -> Route on Bottom Arc
+			edge.route_type = "bottom_arc";
+			edge.layer_index = bottom_arc_count++;
+		} else {
+			seen_forward_pairs[pair_key] = true;
+			edge.route_type = "main";
+		}
+	});
+
+	// 2. Dynamic Height Calculation based on Top and Bottom layers
+	const top_space = top_arc_count > 0 ? (16 + top_arc_count * 22) : 10;
 	const main_y = top_space + 12;
-	const bottom_space = 42; // for labels & sublabels
+	const bottom_space = bottom_arc_count > 0 ? (40 + bottom_arc_count * 22) : 42;
 	const svg_height = main_y + bottom_space;
 
 	svg.setAttribute("width", svg_width);
 	svg.setAttribute("height", svg_height);
 
-	// Map node ID to X coordinate
-	const node_coords = {};
-	nodes.forEach((node, idx) => {
-		node_coords[node.id] = {
-			x: padding_x + idx * node_spacing,
-			y: main_y,
-			data: node
-		};
+	// Update node Y coordinates with calculated main_y
+	nodes.forEach(node => {
+		if (node_coords[node.id]) {
+			node_coords[node.id].y = main_y;
+		}
 	});
 
 	let svg_content = `
@@ -120,36 +148,40 @@ function draw_timeline_svg(svg, nodes, edges) {
 		</defs>
 	`;
 
-	let arc_index = 0;
-
 	// 3. Draw Edges
 	edges.forEach(edge => {
 		const source = node_coords[edge.from];
 		const target = node_coords[edge.to];
 		if (!source || !target) return;
 
-		const is_arc = edge.is_arc || edge.status === "rejected";
 		let path_d = "";
 		let mid_x = (source.x + target.x) / 2;
 		let mid_y = main_y;
 
-		if (is_arc) {
-			// Orthogonal 3-segment straight lines: Up -> Horizontal -> Down
-			const layer_offset = 20 + arc_index * 22;
-			arc_index++;
+		const source_r = (source.data.status === "current") ? 11 : 9;
+		const target_r = (target.data.status === "current") ? 11 : 9;
+
+		if (edge.route_type === "top_arc") {
+			// Top Orthogonal Arc: Up -> Horizontal -> Down
+			const layer_offset = 20 + (edge.layer_index || 0) * 22;
 			const y_top = main_y - layer_offset;
 			mid_y = y_top;
 
-			const source_r = (source.data.status === "current") ? 11 : 9;
-			const target_r = (target.data.status === "current") ? 11 : 9;
-
-			// Path: Up from source node, horizontal across, down into target node
 			path_d = `M ${source.x} ${source.y - source_r} L ${source.x} ${y_top} L ${target.x} ${y_top} L ${target.x} ${target.y - target_r - 2}`;
+		} else if (edge.route_type === "bottom_arc") {
+			// Bottom Orthogonal Arc: Down -> Horizontal -> Up
+			const layer_offset = 32 + (edge.layer_index || 0) * 22;
+			const y_bottom = main_y + layer_offset;
+			mid_y = y_bottom;
+
+			path_d = `M ${source.x} ${source.y + source_r} L ${source.x} ${y_bottom} L ${target.x} ${y_bottom} L ${target.x} ${target.y + target_r + 2}`;
 		} else {
-			// Straight horizontal forward line
-			const source_r = (source.data.status === "current") ? 11 : 9;
-			const target_r = (target.data.status === "current") ? 11 : 9;
-			path_d = `M ${source.x + source_r + 2} ${source.y} L ${target.x - target_r - 2} ${target.y}`;
+			// Straight horizontal forward line on main_y
+			if (source.x < target.x) {
+				path_d = `M ${source.x + source_r + 2} ${source.y} L ${target.x - target_r - 2} ${target.y}`;
+			} else {
+				path_d = `M ${source.x - source_r - 2} ${source.y} L ${target.x + target_r + 2} ${target.y}`;
+			}
 		}
 
 		let marker_id = "marker-future";
