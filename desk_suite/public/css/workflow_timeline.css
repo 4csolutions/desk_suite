@@ -2,7 +2,7 @@
 
 .workflow-timeline-wrapper {
 	margin: 4px 0 8px 0;
-	padding: 6px 16px;
+	padding: 8px 16px;
 	background: var(--card-bg, #ffffff);
 	border: 1px solid var(--border-color, #e2e8f0);
 	border-radius: var(--border-radius-lg, 6px);
@@ -14,7 +14,7 @@
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	margin-bottom: 4px;
+	margin-bottom: 6px;
 	padding-bottom: 4px;
 	border-bottom: 1px solid var(--border-color, #f8fafc);
 }
@@ -34,20 +34,44 @@
 	color: var(--primary, #2563eb);
 }
 
+/* Responsive Canvas Container with Sleek Custom Horizontal Scrollbar */
 .workflow-timeline-canvas-container {
 	width: 100%;
 	display: flex;
-	justify-content: center;
+	justify-content: flex-start;
 	align-items: center;
 	overflow-x: auto;
+	overflow-y: hidden;
 	-webkit-overflow-scrolling: touch;
-	padding: 4px 0;
+	padding: 6px 0 10px 0;
+	scrollbar-width: thin;
+	scrollbar-color: var(--border-color, #cbd5e1) transparent;
+}
+
+/* Custom Scrollbar Styles for WebKit browsers */
+.workflow-timeline-canvas-container::-webkit-scrollbar {
+	height: 6px;
+}
+
+.workflow-timeline-canvas-container::-webkit-scrollbar-track {
+	background: var(--control-bg, #f8fafc);
+	border-radius: 4px;
+}
+
+.workflow-timeline-canvas-container::-webkit-scrollbar-thumb {
+	background: var(--border-color, #cbd5e1);
+	border-radius: 4px;
+	transition: background 0.2s ease;
+}
+
+.workflow-timeline-canvas-container::-webkit-scrollbar-thumb:hover {
+	background: var(--text-muted, #94a3b8);
 }
 
 .workflow-timeline-svg {
 	display: block;
 	margin: 0 auto;
-	max-width: 100%;
+	flex-shrink: 0;
 	height: auto;
 }
 
