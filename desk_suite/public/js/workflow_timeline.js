@@ -75,8 +75,17 @@ function draw_timeline_svg(svg, nodes, edges) {
 	const padding_x = 55;
 	const node_spacing = 140;
 	const svg_width = padding_x * 2 + Math.max(0, node_count - 1) * node_spacing;
-	const svg_height = 70;
-	const main_y = 22;
+
+	// 1. Separate forward edges vs orthogonal arc (return/loopback) edges
+	const arc_edges = edges.filter(e => e.is_arc || e.status === "rejected");
+	const arc_count = arc_edges.length;
+
+	// 2. Dynamic Height Calculation based on return layers
+	const max_arc_layer = arc_count;
+	const top_space = max_arc_layer > 0 ? (16 + max_arc_layer * 22) : 10;
+	const main_y = top_space + 12;
+	const bottom_space = 42; // for labels & sublabels
+	const svg_height = main_y + bottom_space;
 
 	svg.setAttribute("width", svg_width);
 	svg.setAttribute("height", svg_height);
@@ -93,22 +102,24 @@ function draw_timeline_svg(svg, nodes, edges) {
 
 	let svg_content = `
 		<defs>
-			<marker id="marker-approved" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+			<marker id="marker-approved" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
 				<path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981" />
 			</marker>
-			<marker id="marker-pending" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+			<marker id="marker-pending" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
 				<path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b" />
 			</marker>
-			<marker id="marker-rejected" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+			<marker id="marker-rejected" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
 				<path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" />
 			</marker>
-			<marker id="marker-future" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+			<marker id="marker-future" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
 				<path d="M 0 0 L 10 5 L 0 10 z" fill="#cbd5e1" />
 			</marker>
 		</defs>
 	`;
 
-	// 1. Draw Edges
+	let arc_index = 0;
+
+	// 3. Draw Edges
 	edges.forEach(edge => {
 		const source = node_coords[edge.from];
 		const target = node_coords[edge.to];
@@ -120,11 +131,22 @@ function draw_timeline_svg(svg, nodes, edges) {
 		let mid_y = main_y;
 
 		if (is_arc) {
-			const arc_height = 16;
-			mid_y = main_y - arc_height;
-			path_d = `M ${source.x} ${source.y - 9} Q ${mid_x} ${mid_y} ${target.x} ${target.y - 9}`;
+			// Orthogonal 3-segment straight lines: Up -> Horizontal -> Down
+			const layer_offset = 20 + arc_index * 22;
+			arc_index++;
+			const y_top = main_y - layer_offset;
+			mid_y = y_top;
+
+			const source_r = (source.data.status === "current") ? 11 : 9;
+			const target_r = (target.data.status === "current") ? 11 : 9;
+
+			// Path: Up from source node, horizontal across, down into target node
+			path_d = `M ${source.x} ${source.y - source_r} L ${source.x} ${y_top} L ${target.x} ${y_top} L ${target.x} ${target.y - target_r - 2}`;
 		} else {
-			path_d = `M ${source.x + 11} ${source.y} L ${target.x - 11} ${target.y}`;
+			// Straight horizontal forward line
+			const source_r = (source.data.status === "current") ? 11 : 9;
+			const target_r = (target.data.status === "current") ? 11 : 9;
+			path_d = `M ${source.x + source_r + 2} ${source.y} L ${target.x - target_r - 2} ${target.y}`;
 		}
 
 		let marker_id = "marker-future";
@@ -153,7 +175,7 @@ function draw_timeline_svg(svg, nodes, edges) {
 		}
 	});
 
-	// 2. Draw Nodes
+	// 4. Draw Nodes
 	nodes.forEach(node => {
 		const coord = node_coords[node.id];
 		const is_current = node.status === "current";
