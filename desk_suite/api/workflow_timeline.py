@@ -14,6 +14,7 @@ def get_workflow_timeline_data(doctype: str, docname: str):
 	Includes:
 	- Historical transitions with calculated durations & timestamps.
 	- Rejected / Loopback transition arcs.
+	- Distinct Re-approval process lines.
 	- Condition-evaluated future path to final approved state (docstatus = 1).
 	"""
 	if not doctype or not docname:
@@ -306,6 +307,7 @@ def build_graph_topology(workflow, history, current_state, future_path, state_do
 		)
 
 	edges = []
+	has_rejection_occurred = False
 
 	# 1. Historical Edges
 	for i in range(len(history) - 1):
@@ -316,8 +318,9 @@ def build_graph_topology(workflow, history, current_state, future_path, state_do
 		if is_rejection:
 			edge_status = "rejected"
 			dur = history[i].get("duration", "")
+			has_rejection_occurred = True
 		else:
-			edge_status = "approved"
+			edge_status = "reapproved" if has_rejection_occurred else "approved"
 			dur = history[i].get("duration", "")
 
 		edges.append(
@@ -327,6 +330,7 @@ def build_graph_topology(workflow, history, current_state, future_path, state_do
 				"status": edge_status,
 				"duration": dur,
 				"is_arc": is_rejection,
+				"is_reapproval": (has_rejection_occurred and not is_rejection),
 				"user": history[i].get("user_full_name", ""),
 			}
 		)
@@ -338,7 +342,7 @@ def build_graph_topology(workflow, history, current_state, future_path, state_do
 		action_label = get_transition_action(workflow, from_s, to_s)
 
 		already_exists = any(
-			e["from"] == from_s and e["to"] == to_s for e in edges if e["status"] == "approved"
+			e["from"] == from_s and e["to"] == to_s for e in edges if e["status"] in ["approved", "reapproved"]
 		)
 		if not already_exists:
 			is_next = from_s == current_state
@@ -351,6 +355,7 @@ def build_graph_topology(workflow, history, current_state, future_path, state_do
 					"status": "pending_active" if is_next else "future",
 					"duration": dur,
 					"is_arc": False,
+					"is_reapproval": False,
 				}
 			)
 

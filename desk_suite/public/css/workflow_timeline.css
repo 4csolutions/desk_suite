@@ -112,6 +112,13 @@
 	opacity: 1 !important;
 }
 
+.wf-edge-line.reapproved {
+	stroke: #0284c7 !important;
+	stroke-width: 2.2px !important;
+	stroke-dasharray: 6 3 !important;
+	opacity: 1 !important;
+}
+
 .wf-edge-line.pending_active {
 	stroke: #f59e0b !important;
 	stroke-width: 2.2px !important;
@@ -157,6 +164,15 @@
 
 .wf-duration-pill.approved-pill + .wf-duration-text {
 	fill: #065f46;
+}
+
+.wf-duration-pill.reapproved-pill {
+	fill: #e0f2fe;
+	stroke: #38bdf8;
+}
+
+.wf-duration-pill.reapproved-pill + .wf-duration-text {
+	fill: #0369a1;
 }
 
 .wf-duration-pill.current-pill {

@@ -105,6 +105,9 @@ function draw_timeline_svg(svg, nodes, edges) {
 			<marker id="marker-approved" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
 				<path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981" />
 			</marker>
+			<marker id="marker-reapproved" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+				<path d="M 0 0 L 10 5 L 0 10 z" fill="#0284c7" />
+			</marker>
 			<marker id="marker-pending" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
 				<path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b" />
 			</marker>
@@ -151,6 +154,7 @@ function draw_timeline_svg(svg, nodes, edges) {
 
 		let marker_id = "marker-future";
 		if (edge.status === "approved") marker_id = "marker-approved";
+		if (edge.status === "reapproved") marker_id = "marker-reapproved";
 		if (edge.status === "pending_active") marker_id = "marker-pending";
 		if (edge.status === "rejected") marker_id = "marker-rejected";
 
@@ -163,6 +167,7 @@ function draw_timeline_svg(svg, nodes, edges) {
 			const pill_w = Math.max(44, edge.duration.length * 7 + 10);
 			const pill_h = 16;
 			let pill_class = "approved-pill";
+			if (edge.status === "reapproved") pill_class = "reapproved-pill";
 			if (edge.status === "rejected") pill_class = "rejected-pill";
 			if (edge.status === "pending_active") pill_class = "current-pill";
 
