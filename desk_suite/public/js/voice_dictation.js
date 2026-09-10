@@ -82,12 +82,37 @@ function extend_control_text_editor() {
 
     const ControlTextEditor = frappe.ui.form.ControlTextEditor;
 
+    // Check if voice dictation should be enabled on this editor (only when complete toolbar is active, not in grid row / child table list view)
+    ControlTextEditor.prototype.should_enable_speech_dictation = function() {
+        // If it's in a grid row (table list view / editable row), Frappe suppresses the toolbar
+        if (this.grid_row) {
+            return false;
+        }
+
+        // Check if inside a grid row or child table list view container DOM
+        if (this.$wrapper && (this.$wrapper.closest(".grid-row").length || this.$wrapper.closest(".grid-row-open").length || this.$wrapper.closest(".form-in-grid").length)) {
+            // If in form-in-grid (the expanded row form), the complete toolbar is visible unless grid_row flag hides it.
+            // But in child table list view (grid-row without open form or grid-static-col), toolbar is not visible.
+            if (this.$wrapper.closest(".grid-static-col").length || this.$wrapper.closest(".row-index").length) {
+                return false;
+            }
+        }
+
+        return true;
+    };
+
     // 1. Override get_quill_options to dynamically insert the 'speech' button into toolbar
     const original_get_quill_options = ControlTextEditor.prototype.get_quill_options;
     ControlTextEditor.prototype.get_quill_options = function() {
         const options = original_get_quill_options.call(this);
+
+        // Don't add speech button if speech dictation is disabled or if toolbar is disabled/empty
+        if (!this.should_enable_speech_dictation()) {
+            return options;
+        }
+
         if (options.modules && options.modules.toolbar) {
-            if (Array.isArray(options.modules.toolbar)) {
+            if (Array.isArray(options.modules.toolbar) && options.modules.toolbar.length > 0) {
                 let has_speech = false;
                 for (let group of options.modules.toolbar) {
                     if (Array.isArray(group) && group.includes("speech")) {
@@ -108,15 +133,32 @@ function extend_control_text_editor() {
     const original_make_quill_editor = ControlTextEditor.prototype.make_quill_editor;
     ControlTextEditor.prototype.make_quill_editor = function() {
         original_make_quill_editor.call(this);
-        if (this.quill) {
+        if (this.quill && this.should_enable_speech_dictation()) {
             this.setup_speech_dictation();
+        } else {
+            this.$wrapper.find(".ql-speech").remove();
         }
     };
 
     // 3. Add Speech Dictation Setup and Handlers
     ControlTextEditor.prototype.setup_speech_dictation = function() {
+        if (!this.should_enable_speech_dictation()) {
+            this.$wrapper.find(".ql-speech").remove();
+            return;
+        }
+
         const toolbar = this.quill.getModule("toolbar");
         if (!toolbar) return;
+
+        // If the toolbar container itself is missing, hidden or empty, do not show mic
+        if (!toolbar.container || !$(toolbar.container).is(":visible")) {
+            // Also check if toolbar has children or options
+            const $toolbar = this.$wrapper.find(".ql-toolbar");
+            if (!$toolbar.length || !$toolbar.is(":visible")) {
+                this.$wrapper.find(".ql-speech").remove();
+                return;
+            }
+        }
 
         const $speech_btn = this.$wrapper.find(".ql-speech");
         if (!$speech_btn.length) return;
