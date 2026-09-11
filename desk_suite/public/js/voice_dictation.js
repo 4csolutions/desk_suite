@@ -133,7 +133,7 @@ function extend_control_text_editor() {
         return options;
     };
 
-    // 2. Intercept make_quill_editor to configure speech dictation
+    // 2. Intercept make_quill_editor and refresh to configure speech dictation
     const original_make_quill_editor = ControlTextEditor.prototype.make_quill_editor;
     ControlTextEditor.prototype.make_quill_editor = function() {
         original_make_quill_editor.call(this);
@@ -141,6 +141,18 @@ function extend_control_text_editor() {
             this.setup_speech_dictation();
         } else {
             this.$wrapper.find(".ql-speech").remove();
+        }
+    };
+
+    // Also hook refresh so that when a child table row is expanded into .form-in-grid,
+    // the toolbar button is properly configured once visible.
+    const original_refresh = ControlTextEditor.prototype.refresh;
+    ControlTextEditor.prototype.refresh = function() {
+        if (original_refresh) {
+            original_refresh.call(this);
+        }
+        if (this.quill && this.should_show_speech_dictation()) {
+            this.setup_speech_dictation();
         }
     };
 
@@ -154,15 +166,25 @@ function extend_control_text_editor() {
         const toolbar = this.quill.getModule("toolbar");
         if (!toolbar) return;
 
-        // Ensure toolbar is present in the DOM and not an empty toolbar
+        // Ensure toolbar is present in the DOM
         const $toolbar = this.$wrapper.find(".ql-toolbar");
-        if (!$toolbar.length || !$toolbar.is(":visible")) {
+        if (!$toolbar.length) {
+            return;
+        }
+
+        // Must not be an empty toolbar (e.g. inline grid cells have 0 toolbar children)
+        if ($toolbar.children().length === 0) {
             this.$wrapper.find(".ql-speech").remove();
             return;
         }
 
-        const $speech_btn = this.$wrapper.find(".ql-speech");
-        if (!$speech_btn.length) return;
+        let $speech_btn = $toolbar.find(".ql-speech");
+        if (!$speech_btn.length) {
+            // Quill doesn't automatically create DOM buttons for custom toolbar keys
+            // without custom format handlers, so we append the button into the toolbar
+            const $group = $(`<span class="ql-formats"></span>`).appendTo($toolbar);
+            $speech_btn = $(`<button type="button" class="ql-speech" title="${__("Voice Dictation")}"></button>`).appendTo($group);
+        }
 
         // Render beautiful SVG microphone icon
         $speech_btn.html(`
